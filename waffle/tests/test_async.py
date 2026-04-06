@@ -206,6 +206,18 @@ class AsyncWaffleTests(TestCase):
         await waffle.aflag_is_active(request, 'foo')
         mock_logger.log.assert_called_with(logging.WARNING, 'Flag %s not found', 'foo')
 
+    async def test_testing_flag_cookie(self):
+        await waffle.get_waffle_flag_model().objects.acreate(name='foo', testing=True)
+        request = get()
+        request.COOKIES['dwft_foo'] = 'True'
+        assert await waffle.aflag_is_active(request, 'foo')
+
+    async def test_no_user_on_request(self):
+        await waffle.get_waffle_flag_model().objects.acreate(name='myflag', superusers=True)
+        request = RequestFactory().get('/foo')
+        # request has no user attribute
+        assert not await waffle.aflag_is_active(request, 'myflag')
+
     @override_settings(DATABASE_ROUTERS=['waffle.tests.base.ReplicationRouter'])
     async def test_read_from_write_db(self):
         await waffle.get_waffle_flag_model().objects.acreate(name='myflag', everyone=True)
@@ -214,6 +226,67 @@ class AsyncWaffleTests(TestCase):
         # By default, aflag_is_active should hit whatever it configured as the
         # read DB (so values will be stale if replication is lagged).
         assert not await waffle.aflag_is_active(request, 'myflag')
+
+
+class AsyncBaseModelTests(TestCase):
+    """Tests for async BaseModel methods (aget, aget_all, aflush) that aren't
+    exercised through the public API tests above."""
+
+    databases = DATABASES
+
+    async def test_aget_cache_empty_branch(self):
+        """Second call for a nonexistent key should hit CACHE_EMPTY."""
+        model = waffle.get_waffle_switch_model()
+        await waffle.aswitch_is_active('nonexistent')
+        # Second call hits the CACHE_EMPTY branch
+        result = await model.aget('nonexistent')
+        assert result.pk is None
+
+    async def test_aget_all(self):
+        await waffle.get_waffle_switch_model().objects.acreate(name='s1', active=True)
+        await waffle.get_waffle_switch_model().objects.acreate(name='s2', active=False)
+        result = await waffle.get_waffle_switch_model().aget_all()
+        assert len(result) == 2
+        names = {s.name for s in result}
+        assert names == {'s1', 's2'}
+
+    async def test_aget_all_from_db(self):
+        await waffle.get_waffle_switch_model().objects.acreate(name='s1', active=True)
+        result = await waffle.get_waffle_switch_model().aget_all_from_db()
+        assert len(result) == 1
+
+    async def test_aget_all_cache_hit(self):
+        await waffle.get_waffle_switch_model().objects.acreate(name='s1', active=True)
+        await waffle.get_waffle_switch_model().aget_all()
+        # Second call should hit cache
+        result = await waffle.get_waffle_switch_model().aget_all()
+        assert len(result) == 1
+
+    async def test_aget_all_empty(self):
+        result = await waffle.get_waffle_switch_model().aget_all()
+        assert result == []
+
+    async def test_aget_all_empty_cached(self):
+        # First call sets CACHE_EMPTY
+        await waffle.get_waffle_switch_model().aget_all()
+        # Second call hits CACHE_EMPTY branch
+        result = await waffle.get_waffle_switch_model().aget_all()
+        assert result == []
+
+    async def test_aflush(self):
+        await waffle.get_waffle_switch_model().objects.acreate(name='flush_me', active=True)
+        fetched = await waffle.get_waffle_switch_model().aget('flush_me')
+        await fetched.aflush()
+        # After flush, should still be fetchable from DB
+        fetched2 = await waffle.get_waffle_switch_model().aget('flush_me')
+        assert fetched2.pk == fetched.pk
+
+    async def test_aflush_flag(self):
+        await waffle.get_waffle_flag_model().objects.acreate(name='myflag', everyone=True)
+        fetched = await waffle.get_waffle_flag_model().aget('myflag')
+        await fetched.aflush()
+        fetched2 = await waffle.get_waffle_flag_model().aget('myflag')
+        assert fetched2.pk == fetched.pk
 
 
 class AsyncSwitchTests(TestCase):
