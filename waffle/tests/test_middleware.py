@@ -5,7 +5,6 @@ from waffle.middleware import WaffleMiddleware
 
 
 get = RequestFactory().get('/foo')
-middleware = WaffleMiddleware(lambda request: HttpResponse())
 
 
 def test_set_cookies():
@@ -14,7 +13,7 @@ def test_set_cookies():
     assert 'dwf_foo' not in resp.cookies
     assert 'dwf_bar' not in resp.cookies
 
-    resp = middleware.process_response(get, resp)
+    resp = WaffleMiddleware().process_response(get, resp)
     assert 'dwf_foo' in resp.cookies
     assert 'dwf_bar' in resp.cookies
 
@@ -28,7 +27,7 @@ def test_rollout_cookies():
                    'baz': [True, False],
                    'qux': [False, False]}
     resp = HttpResponse()
-    resp = middleware.process_response(get, resp)
+    resp = WaffleMiddleware().process_response(get, resp)
     for k in get.waffles:
         cookie = f'dwf_{k}'
         assert cookie in resp.cookies
@@ -43,7 +42,7 @@ def test_testing_cookies():
     get.waffles = {}
     get.waffle_tests = {'foo': True, 'bar': False}
     resp = HttpResponse()
-    resp = middleware.process_response(get, resp)
+    resp = WaffleMiddleware().process_response(get, resp)
     for k in get.waffle_tests:
         cookie = f'dwft_{k}'
         assert str(get.waffle_tests[k]) == resp.cookies[cookie].value
