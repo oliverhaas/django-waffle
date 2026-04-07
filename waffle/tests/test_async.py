@@ -197,7 +197,7 @@ class AsyncWaffleTests(TestCase):
     async def test_no_logging_missing_flag_by_default(self, mock_logger):
         request = get()
         await waffle.aflag_is_active(request, 'foo')
-        mock_logger.log.call_count == 0
+        mock_logger.log.assert_not_called()
 
     @override_settings(WAFFLE_LOG_MISSING_FLAGS=logging.WARNING)
     @mock.patch('waffle.models.logger')
@@ -346,7 +346,7 @@ class AsyncSwitchTests(TestCase):
     @mock.patch('waffle.models.logger')
     async def test_no_logging_missing_switch_by_default(self, mock_logger):
         await waffle.aswitch_is_active('foo')
-        mock_logger.log.call_count == 0
+        mock_logger.log.assert_not_called()
 
     @override_settings(WAFFLE_LOG_MISSING_SWITCHES=logging.WARNING)
     @mock.patch('waffle.models.logger')
@@ -412,7 +412,7 @@ class AsyncSampleTests(TestCase):
     @mock.patch('waffle.models.logger')
     async def test_no_logging_missing_sample_by_default(self, mock_logger):
         await waffle.asample_is_active('foo')
-        mock_logger.log.call_count == 0
+        mock_logger.log.assert_not_called()
 
     @override_settings(WAFFLE_LOG_MISSING_SAMPLES=logging.WARNING)
     @mock.patch('waffle.models.logger')
