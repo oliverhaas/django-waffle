@@ -11,9 +11,13 @@ class WaffleMiddleware:
     async_capable = True
 
     def __init__(self, get_response):
+        if get_response is None:
+            raise ValueError("get_response must be provided.")
         self.get_response = get_response
-        if iscoroutinefunction(self.get_response):
+        self.is_async = iscoroutinefunction(get_response)
+        if self.is_async:
             markcoroutinefunction(self)
+        super().__init__()
 
     def process_response(self, request: HttpRequest, response: HttpResponse) -> HttpResponse:
         secure = get_setting('SECURE')
@@ -39,7 +43,7 @@ class WaffleMiddleware:
         return response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
-        if iscoroutinefunction(self.get_response):
+        if self.is_async:
             return self.__acall__(request)
         response = self.get_response(request)
         return self.process_response(request, response)
